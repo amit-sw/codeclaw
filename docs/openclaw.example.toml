@@ -1,0 +1,53 @@
+[gateway]
+host = "127.0.0.1"
+port = 18789
+token = "dummy-token"
+password = "dummy-password"
+
+[[agents]]
+id = "default"
+name = "Default Agent"
+model = "gpt-5.3"
+provider = "openai"
+system_prompt = "You are a concise assistant."
+
+[[agents]]
+id = "local"
+name = "Local Agent"
+model = "local-model"
+provider = "local"
+system_prompt = "You are a local assistant."
+
+[llm.openai]
+api_key = "dummy-openai-key"
+base_url = "https://api.openai.com/v1"
+
+[llm.local]
+base_url = "http://localhost:8000/v1"
+api_key = "dummy-local-key"
+
+[langchain]
+api_key = "dummy-langchain-key"
+
+[langsmith]
+api_key = "dummy-langsmith-key"
+project = "openclaw-lite"
+
+[langgraph]
+project = "openclaw-lite-graph"
+
+[telegram]
+bot_token = "dummy-telegram-bot-token"
+poll_interval = 3
+
+[storage]
+base_path = "~/.openclaw/agents"
+retention_days = 30
+compact_interval_hours = 24
+
+[tools]
+approvals_path = "~/.openclaw/approvals.json"
+exec_allowlist = ["echo", "ls", "pwd"]
+
+[doctor]
+strict_mode = true

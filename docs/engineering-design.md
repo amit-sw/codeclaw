@@ -231,7 +231,7 @@
 - Location: `~/.openclaw/openclaw.toml`
 - Sections:
   - `[gateway]` host, port, auth token/password
-  - `[agents]` definitions (name, model, system prompt)
+  - `[[agents]]` definitions (id, name, model, provider, system_prompt)
   - `[llm.openai]` api_key, base_url
   - `[llm.local]` base_url, api_key (if required)
   - `[langchain]` api_key

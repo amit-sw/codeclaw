@@ -1,0 +1,28 @@
+[project]
+name = "openclaw-lite"
+version = "0.1.0"
+description = "Minimal OpenClaw-like gateway"
+readme = "AGENTS.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.23",
+  "streamlit>=1.30",
+  "langchain>=0.2",
+  "langchain-openai>=0.1",
+  "langsmith>=0.1",
+  "httpx>=0.27",
+  "pydantic>=2.6",
+  "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+openclaw = "openclaw.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

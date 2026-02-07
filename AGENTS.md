@@ -1,28 +1,34 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is currently empty (no source files or folders detected). When you add code, document the layout here. Recommended minimum structure:
-- `src/`: application/library code
-- `tests/`: automated tests
-- `assets/`: static files (images, fixtures, etc.)
+Key paths:
+- `openclaw/`: core runtime (gateway, agent runtime, tools, storage, CLI, UI, Telegram).
+- `tests/`: pytest suite for config, storage, and tools.
+- `docs/`: architecture and engineering notes.
+  - `docs/deployment.md`: deployment steps.
+  - `docs/troubleshooting.md`: troubleshooting guide.
+  - `docs/openclaw.example.toml`: sample config.
 
 ## Build, Test, and Development Commands
-No build or test tooling is configured yet. When you add tooling, list the exact commands here. Examples:
-- `npm run dev`: run the local dev server
-- `npm test`: run the test suite
-- `make build`: produce production artifacts
+- `openclaw gateway run`: start the FastAPI gateway (reads `~/.openclaw/openclaw.toml`).
+- `openclaw agent send --agent <id> --message "<text>"`: send a CLI message over WebSocket.
+- `openclaw sessions list --agent <id>`: list sessions for an agent.
+- `openclaw sessions view --agent <id> --session <id>`: view transcript events.
+- `openclaw doctor`: validate config TOML and required paths.
+- `openclaw test`: run the full pytest suite.
+- `openclaw tools allow <tool>`: approve a tool permanently.
+- `streamlit run openclaw/ui.py`: launch the Streamlit UI.
+- `python -m openclaw.telegram`: run Telegram polling.
 
 ## Coding Style & Naming Conventions
-No formatter or linter is configured. Once set, document the rules here. Suggested defaults:
-- Indentation: 2 spaces (JS/TS) or 4 spaces (Python)
-- File naming: `kebab-case` for folders, `PascalCase` for React components
-- Formatting tools: `prettier`, `eslint`, `ruff`, `black`
+- Indentation: 4 spaces (Python).
+- File naming: `snake_case.py` for modules.
+- No formatter or linter is enforced yet; keep functions small and explicit.
 
 ## Testing Guidelines
-No testing framework is configured yet. When you add tests, specify:
-- Framework (e.g., `vitest`, `jest`, `pytest`)
-- Naming (e.g., `*.test.ts`, `test_*.py`)
-- How to run tests and expected coverage targets
+- Framework: `pytest`.
+- Run: `pytest -q` (or `openclaw test`).
+- Tests live under `tests/` and follow `test_*.py` naming.
 
 ## Commit & Pull Request Guidelines
 No Git history was found to infer conventions. Until established, use:
@@ -30,4 +36,4 @@ No Git history was found to infer conventions. Until established, use:
 - Pull requests: include a clear description, linked issue (if any), and screenshots for UI changes
 
 ## Configuration & Secrets
-Do not commit secrets. Use a local `.env` for development and document required keys in `README.md` once the project is initialized.
+Do not commit secrets. The gateway reads `~/.openclaw/openclaw.toml` for API keys, auth token/password, and channel settings. Use `openclaw doctor` to validate the file before running.
