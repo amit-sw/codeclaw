@@ -1,7 +1,7 @@
 [project]
-name = "openclaw-lite"
+name = "codeclaw-lite"
 version = "0.1.0"
-description = "Minimal OpenClaw-like gateway"
+description = "Minimal CodeClaw-like gateway"
 readme = "AGENTS.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -22,7 +22,7 @@ dev = [
 ]
 
 [project.scripts]
-openclaw = "openclaw.cli:main"
+codeclaw = "codeclaw.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

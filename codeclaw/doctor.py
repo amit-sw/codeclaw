@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openclaw.config import load_config
+from codeclaw.config import load_config
 
 
 def run_doctor(config_path: str | None = None) -> int:

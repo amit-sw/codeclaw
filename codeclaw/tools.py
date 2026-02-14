@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
-from openclaw.approvals import ApprovalsStore
-from openclaw.config import ToolsConfig
+from codeclaw.approvals import ApprovalsStore
+from codeclaw.config import ToolsConfig
 
 
 class ToolApprovalRequired(Exception):

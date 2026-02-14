@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from openclaw.config import StorageConfig
+from codeclaw.config import StorageConfig
 
 
 def _now() -> str:

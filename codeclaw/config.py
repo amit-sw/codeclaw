@@ -54,13 +54,13 @@ class TelegramConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
-    base_path: str = str(Path.home() / ".openclaw" / "agents")
+    base_path: str = str(Path.home() / ".codeclaw" / "agents")
     retention_days: int = 30
     compact_interval_hours: int = 24
 
 
 class ToolsConfig(BaseModel):
-    approvals_path: str = str(Path.home() / ".openclaw" / "approvals.json")
+    approvals_path: str = str(Path.home() / ".codeclaw" / "approvals.json")
     exec_allowlist: list[str] = Field(default_factory=list)
 
 
@@ -82,7 +82,7 @@ class AppConfig(BaseModel):
 
 
 def default_config_path() -> Path:
-    return Path.home() / ".openclaw" / "openclaw.toml"
+    return Path.home() / ".codeclaw" / "codeclaw.toml"
 
 
 def load_config(path: str | None = None) -> AppConfig:

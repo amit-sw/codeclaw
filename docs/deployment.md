@@ -8,7 +8,7 @@ This app runs as three processes:
 
 ## Prerequisites
 - Python 3.11+
-- A global config at `~/.openclaw/openclaw.toml`
+- A global config at `~/.codeclaw/codeclaw.toml`
 
 ## Install
 ```bash
@@ -20,33 +20,33 @@ pip install -e .
 ## Configure
 Copy the sample config and edit keys:
 ```bash
-mkdir -p ~/.openclaw
-cp docs/openclaw.example.toml ~/.openclaw/openclaw.toml
+mkdir -p ~/.codeclaw
+cp docs/codeclaw.example.toml ~/.codeclaw/codeclaw.toml
 ```
 
 ## Run Gateway
 ```bash
-openclaw gateway run
+codeclaw gateway run
 ```
 
 ## Run Streamlit UI
 ```bash
-streamlit run openclaw/ui.py
+streamlit run streamlit_app.py
 ```
 
 ## Run Telegram Poller (optional)
 ```bash
-python -m openclaw.telegram
+python -m codeclaw.telegram
 ```
 
 ## Validate Config
 ```bash
-openclaw doctor
+codeclaw doctor
 ```
 
 ## Run Tests
 ```bash
-openclaw test
+codeclaw test
 ```
 
 ## Ports
@@ -54,4 +54,4 @@ openclaw test
 - Streamlit: `8501` by default
 
 ## Upgrade Notes
-- If you change the config schema, update `openclaw/config.py`, `docs/openclaw.example.toml`, and `docs/engineering-design.md`.
+- If you change the config schema, update `codeclaw/config.py`, `docs/codeclaw.example.toml`, and `docs/engineering-design.md`.

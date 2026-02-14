@@ -1,18 +1,18 @@
-# Engineering Design: Minimal OpenClaw (Pure Python)
+# Engineering Design: Minimal CodeClaw (Pure Python)
 
 ## Planning Session Notes
 - Goals: pure Python Gateway with Telegram + CLI channels, multi-agent routing, on-disk sessions, Streamlit UI, LangChain/LangSmith, OpenAI + local model via OpenAI-compatible HTTP.
 - Constraints: minimal code, minimal exception handling, no skills, no sandbox, global TOML config, simplified WS protocol.
 - Success metrics: CLI/Telegram chat works, sessions persisted and viewable in UI, auth enforced, tools functional end-to-end.
-- Risks: no sandbox for tools; simplified protocol diverges from OpenClaw ecosystem; minimal error handling reduces resilience.
-- Assumptions: session storage uses OpenClaw path layout; Telegram uses polling; Web tool uses HTTP fetch + text extraction.
+- Risks: no sandbox for tools; simplified protocol diverges from CodeClaw ecosystem; minimal error handling reduces resilience.
+- Assumptions: session storage uses CodeClaw path layout; Telegram uses polling; Web tool uses HTTP fetch + text extraction.
 
 ## Architecture Overview
 **Core flow**: Channel -> Gateway -> Session Store -> Agent Runtime -> Tool Registry -> Session Store -> Channel/UI.
 
 **Major components**:
 - Gateway API (HTTP + WebSocket)
-- Session Store (OpenClaw-compatible JSON + JSONL)
+- Session Store (CodeClaw-compatible JSON + JSONL)
 - Agent Runtime (LangChain + LangSmith)
 - Tool Registry (exec, file, web)
 - Channel Adapters (Telegram, CLI)
@@ -221,14 +221,14 @@
 **Events**
 - `session.update` on new messages.
 
-## Storage (OpenClaw-Compatible)
-- Base path: `~/.openclaw/agents/<agentId>/sessions/`
+## Storage (CodeClaw-Compatible)
+- Base path: `~/.codeclaw/agents/<agentId>/sessions/`
 - `sessions.json`: index of sessions
 - `<sessionId>.jsonl`: transcript events
 - Automated retention/compaction (schedule defined in config)
 
 ## Config Schema (TOML, Global)
-- Location: `~/.openclaw/openclaw.toml`
+- Location: `~/.codeclaw/codeclaw.toml`
 - Sections:
   - `[gateway]` host, port, auth token/password
   - `[[agents]]` definitions (id, name, model, provider, system_prompt)

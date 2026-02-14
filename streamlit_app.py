@@ -1,4 +1,4 @@
-from openclaw.cli import main
+from codeclaw.ui import main
 
 
 if __name__ == "__main__":

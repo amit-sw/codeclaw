@@ -1,6 +1,6 @@
-from openclaw.approvals import ApprovalsStore
-from openclaw.config import ToolsConfig
-from openclaw.tools import ToolRegistry, ToolApprovalRequired
+from codeclaw.approvals import ApprovalsStore
+from codeclaw.config import ToolsConfig
+from codeclaw.tools import ToolRegistry, ToolApprovalRequired
 
 
 def test_tool_approval_required(tmp_path):

@@ -1,5 +1,5 @@
-from openclaw.config import StorageConfig
-from openclaw.storage import SessionStore
+from codeclaw.config import StorageConfig
+from codeclaw.storage import SessionStore
 
 
 def test_session_store(tmp_path):

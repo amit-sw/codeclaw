@@ -7,11 +7,11 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header
 from pydantic import BaseModel
 
-from openclaw.approvals import ApprovalsStore
-from openclaw.agent import AgentRuntime
-from openclaw.config import AppConfig, load_config
-from openclaw.storage import SessionStore
-from openclaw.tools import ToolRegistry
+from codeclaw.approvals import ApprovalsStore
+from codeclaw.agent import AgentRuntime
+from codeclaw.config import AppConfig, load_config
+from codeclaw.storage import SessionStore
+from codeclaw.tools import ToolRegistry
 
 
 class SendRequest(BaseModel):
@@ -23,13 +23,17 @@ class SendRequest(BaseModel):
 
 
 def _load_app_config() -> AppConfig:
-    return load_config(os.environ.get("OPENCLAW_CONFIG"))
+    return load_config(os.environ.get("CODECLAW_CONFIG"))
 
 
 def _auth_ok(token: str | None, password: str | None, config: AppConfig) -> bool:
     if token is None or password is None:
         return False
     return token == config.gateway.token and password == config.gateway.password
+
+
+def _error_payload(exc: Exception) -> dict[str, Any]:
+    return {"ok": False, "error": f"{exc.__class__.__name__}: {exc}"}
 
 
 def create_app() -> FastAPI:
@@ -55,23 +59,32 @@ def create_app() -> FastAPI:
     def session_send(req: SendRequest, x_token: str | None = Header(default=None), x_password: str | None = Header(default=None)):
         if not _auth_ok(x_token, x_password, config):
             return {"ok": False, "error": "unauthorized"}
-        session = _get_or_create_session(store, req.agent_id, req.channel, req.peer, req.session_id, req.message)
-        store.append_event(req.agent_id, session["id"], {"role": "user", "content": req.message})
-        assistant = runtime.run_turn(req.agent_id, session["id"], req.message, req.channel, interactive=False)
-        store.append_event(req.agent_id, session["id"], {"role": "assistant", "content": assistant})
-        return {"ok": True, "session_id": session["id"], "assistant_message": assistant}
+        try:
+            session = _get_or_create_session(store, req.agent_id, req.channel, req.peer, req.session_id, req.message)
+            store.append_event(req.agent_id, session["id"], {"role": "user", "content": req.message})
+            assistant = runtime.run_turn(req.agent_id, session["id"], req.message, req.channel, interactive=False)
+            store.append_event(req.agent_id, session["id"], {"role": "assistant", "content": assistant})
+            return {"ok": True, "session_id": session["id"], "assistant_message": assistant}
+        except Exception as exc:
+            return _error_payload(exc)
 
     @app.get("/api/session/list")
     def session_list(agent_id: str, x_token: str | None = Header(default=None), x_password: str | None = Header(default=None)):
         if not _auth_ok(x_token, x_password, config):
             return {"ok": False, "error": "unauthorized"}
-        return {"ok": True, "sessions": store.list_sessions(agent_id)}
+        try:
+            return {"ok": True, "sessions": store.list_sessions(agent_id)}
+        except Exception as exc:
+            return _error_payload(exc)
 
     @app.get("/api/session/events")
     def session_events(agent_id: str, session_id: str, x_token: str | None = Header(default=None), x_password: str | None = Header(default=None)):
         if not _auth_ok(x_token, x_password, config):
             return {"ok": False, "error": "unauthorized"}
-        return {"ok": True, "events": store.read_events(agent_id, session_id)}
+        try:
+            return {"ok": True, "events": store.read_events(agent_id, session_id)}
+        except Exception as exc:
+            return _error_payload(exc)
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
@@ -92,14 +105,18 @@ def create_app() -> FastAPI:
                     password = params.get("password")
                     if _auth_ok(token, password, config):
                         authed = True
-                        await ws.send_text(json.dumps({"type": "res", "id": req_id, "result": {"ok": True, "server_info": {"name": "openclaw-lite"}}}))
+                        await ws.send_text(json.dumps({"type": "res", "id": req_id, "result": {"ok": True, "server_info": {"name": "codeclaw-lite"}}}))
                     else:
                         await ws.send_text(json.dumps({"type": "res", "id": req_id, "error": {"message": "unauthorized"}}))
                     continue
                 if not authed:
                     await ws.send_text(json.dumps({"type": "res", "id": req_id, "error": {"message": "not connected"}}))
                     continue
-                result = _handle_ws_request(method, params, store, runtime, config)
+                try:
+                    result = _handle_ws_request(method, params, store, runtime, config)
+                except Exception as exc:
+                    await ws.send_text(json.dumps({"type": "res", "id": req_id, "error": {"message": f"{exc.__class__.__name__}: {exc}"}}))
+                    continue
                 await ws.send_text(json.dumps({"type": "res", "id": req_id, "result": result}))
                 if method == "session.send" and result.get("session_id"):
                     await ws.send_text(json.dumps({"type": "event", "method": "session.update", "params": {"session_id": result.get("session_id")}}))

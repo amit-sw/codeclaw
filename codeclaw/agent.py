@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -7,14 +8,14 @@ from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from openclaw.config import AppConfig
-from openclaw.storage import SessionStore
-from openclaw.tools import ToolRegistry, ToolApprovalRequired
+from codeclaw.config import AppConfig
+from codeclaw.storage import SessionStore
+from codeclaw.tools import ToolRegistry, ToolApprovalRequired
 
 
 class ToolCall(BaseModel):
     name: str
-    args: dict[str, Any] = {}
+    args_json: str = "{}"
 
 
 class ModelResponse(BaseModel):
@@ -76,7 +77,10 @@ class AgentRuntime:
         response = llm.invoke(messages)
         if response.tool:
             try:
-                result = self.tools.execute(response.tool.name, response.tool.args, channel=channel, interactive=interactive)
+                tool_args = json.loads(response.tool.args_json) if response.tool.args_json else {}
+                if not isinstance(tool_args, dict):
+                    raise ValueError("tool args_json must decode to an object")
+                result = self.tools.execute(response.tool.name, tool_args, channel=channel, interactive=interactive)
                 tool_event = {
                     "role": "tool",
                     "tool": response.tool.name,
@@ -86,5 +90,5 @@ class AgentRuntime:
                 messages.append(SystemMessage(content=f"Tool {response.tool.name}: {result}"))
                 response = llm.invoke(messages)
             except ToolApprovalRequired as exc:
-                return f"Tool '{exc.tool}' requires approval. Approve via CLI 'openclaw tools allow {exc.tool}', Telegram '/allow {exc.tool}', or Streamlit UI."
+                return f"Tool '{exc.tool}' requires approval. Approve via CLI 'codeclaw tools allow {exc.tool}', Telegram '/allow {exc.tool}', or Streamlit UI."
         return response.message

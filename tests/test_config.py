@@ -1,8 +1,8 @@
-from openclaw.config import load_config
+from codeclaw.config import load_config
 
 
 def test_load_config(tmp_path):
-    cfg = tmp_path / "openclaw.toml"
+    cfg = tmp_path / "codeclaw.toml"
     cfg.write_text(
         """
 [gateway]

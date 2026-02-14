@@ -31,22 +31,22 @@ api_key = "dummy-langchain-key"
 
 [langsmith]
 api_key = "dummy-langsmith-key"
-project = "openclaw-lite"
+project = "codeclaw-lite"
 
 [langgraph]
-project = "openclaw-lite-graph"
+project = "codeclaw-lite-graph"
 
 [telegram]
 bot_token = "dummy-telegram-bot-token"
 poll_interval = 3
 
 [storage]
-base_path = "~/.openclaw/agents"
+base_path = "~/.codeclaw/agents"
 retention_days = 30
 compact_interval_hours = 24
 
 [tools]
-approvals_path = "~/.openclaw/approvals.json"
+approvals_path = "~/.codeclaw/approvals.json"
 exec_allowlist = ["echo", "ls", "pwd"]
 
 [doctor]

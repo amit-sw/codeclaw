@@ -5,8 +5,8 @@ import time
 
 import httpx
 
-from openclaw.approvals import ApprovalsStore
-from openclaw.config import load_config
+from codeclaw.approvals import ApprovalsStore
+from codeclaw.config import load_config
 
 
 def _gateway_url(config):
@@ -24,7 +24,7 @@ def _send_gateway(config, agent_id: str, message: str, session_id: str | None, p
 
 
 def poll_loop():
-    config = load_config(os.environ.get("OPENCLAW_CONFIG"))
+    config = load_config(os.environ.get("CODECLAW_CONFIG"))
     approvals = ApprovalsStore(config.tools.approvals_path)
     offset = 0
     while True:

@@ -5,10 +5,10 @@ import subprocess
 
 import uvicorn
 
-from openclaw.approvals import ApprovalsStore
-from openclaw.config import load_config
-from openclaw.gateway_client import ws_request_sync
-from openclaw.doctor import run_doctor
+from codeclaw.approvals import ApprovalsStore
+from codeclaw.config import load_config
+from codeclaw.gateway_client import ws_request_sync
+from codeclaw.doctor import run_doctor
 
 
 def _ws_url(config):
@@ -17,7 +17,7 @@ def _ws_url(config):
 
 def cmd_gateway_run(args):
     config = load_config(args.config)
-    uvicorn.run("openclaw.gateway:app", host=config.gateway.host, port=config.gateway.port)
+    uvicorn.run("codeclaw.gateway:app", host=config.gateway.host, port=config.gateway.port)
 
 
 def cmd_agent_send(args):
@@ -82,7 +82,7 @@ def cmd_tools_allow(args):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="openclaw")
+    parser = argparse.ArgumentParser(prog="codeclaw")
     parser.add_argument("--config", default=None)
 
     sub = parser.add_subparsers(dest="command")
