@@ -1,26 +1,16 @@
 from __future__ import annotations
 
-import json
+import inspect
 import os
 from typing import Any
 
-from pydantic import BaseModel
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from codeclaw.config import AppConfig
 from codeclaw.storage import SessionStore
 from codeclaw.tools import ToolRegistry, ToolApprovalRequired
-
-
-class ToolCall(BaseModel):
-    name: str
-    args_json: str = "{}"
-
-
-class ModelResponse(BaseModel):
-    message: str
-    tool: ToolCall | None = None
 
 
 class AgentRuntime:
@@ -55,9 +45,9 @@ class AgentRuntime:
             model=agent.model,
         )
 
-    def _build_messages(self, agent_id: str, events: list[dict], user_msg: str) -> list:
+    def _build_messages(self, agent_id: str, events: list[dict], user_msg: str) -> list[BaseMessage]:
         agent = self._agent_config(agent_id)
-        messages: list = [SystemMessage(content=agent.system_prompt or "")]
+        messages: list[BaseMessage] = [SystemMessage(content=agent.system_prompt or "")]
         for event in events:
             role = event.get("role")
             content = event.get("content", "")
@@ -70,25 +60,78 @@ class AgentRuntime:
         messages.append(HumanMessage(content=user_msg))
         return messages
 
+    def _content_text(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "text":
+                        parts.append(str(item.get("text", "")))
+                    elif "content" in item:
+                        parts.append(str(item.get("content", "")))
+                else:
+                    parts.append(str(item))
+            return "\n".join(part for part in parts if part)
+        return str(content)
+
+    def _extract_assistant_message(self, result: dict[str, Any]) -> str:
+        messages = result.get("messages", [])
+        for message in reversed(messages):
+            msg_type = getattr(message, "type", None) or (message.get("type") if isinstance(message, dict) else None)
+            if msg_type in {"ai", "assistant"}:
+                content = getattr(message, "content", None)
+                if content is None and isinstance(message, dict):
+                    content = message.get("content")
+                return self._content_text(content)
+        raise ValueError("no assistant response produced")
+
+    def _deep_agent(self, agent_id: str, channel: str, interactive: bool):
+        llm = self._llm(agent_id)
+
+        def exec_tool(cmd: str) -> dict[str, Any]:
+            """Execute a shell command and return stdout/stderr and exit status."""
+            return self.tools.execute("exec", {"cmd": cmd}, channel=channel, interactive=interactive)
+
+        def file_read(path: str) -> dict[str, Any]:
+            """Read file contents from a local path."""
+            return self.tools.execute("file.read", {"path": path}, channel=channel, interactive=interactive)
+
+        def file_write(path: str, content: str) -> dict[str, Any]:
+            """Write content to a local file path."""
+            return self.tools.execute("file.write", {"path": path, "content": content}, channel=channel, interactive=interactive)
+
+        def web_fetch(url: str) -> dict[str, Any]:
+            """Fetch a URL over HTTP and return response text and status code."""
+            return self.tools.execute("web.fetch", {"url": url}, channel=channel, interactive=interactive)
+
+        agent = self._agent_config(agent_id)
+        planning_controls = (
+            "For every user request, create and maintain a todo plan before execution. "
+            "Only use available tools and follow tool approval controls."
+        )
+        instructions = "\n\n".join(part for part in [agent.system_prompt, planning_controls] if part)
+        tool_list = [exec_tool, file_read, file_write, web_fetch]
+        params = inspect.signature(create_deep_agent).parameters
+        if "instructions" in params:
+            if "model" in params:
+                return create_deep_agent(model=llm, tools=tool_list, instructions=instructions)
+            return create_deep_agent(tools=tool_list, instructions=instructions)
+        if "prompt_prefix" in params:
+            if "model" in params:
+                return create_deep_agent(tool_list, instructions, model=llm)
+            return create_deep_agent(tool_list, instructions)
+        if "model" in params:
+            return create_deep_agent(model=llm, tools=tool_list)
+        return create_deep_agent(tool_list)
+
     def run_turn(self, agent_id: str, session_id: str, user_msg: str, channel: str, interactive: bool) -> str:
         events = self.store.read_events(agent_id, session_id)
-        llm = self._llm(agent_id).with_structured_output(ModelResponse)
         messages = self._build_messages(agent_id, events, user_msg)
-        response = llm.invoke(messages)
-        if response.tool:
-            try:
-                tool_args = json.loads(response.tool.args_json) if response.tool.args_json else {}
-                if not isinstance(tool_args, dict):
-                    raise ValueError("tool args_json must decode to an object")
-                result = self.tools.execute(response.tool.name, tool_args, channel=channel, interactive=interactive)
-                tool_event = {
-                    "role": "tool",
-                    "tool": response.tool.name,
-                    "content": result,
-                }
-                self.store.append_event(agent_id, session_id, tool_event)
-                messages.append(SystemMessage(content=f"Tool {response.tool.name}: {result}"))
-                response = llm.invoke(messages)
-            except ToolApprovalRequired as exc:
-                return f"Tool '{exc.tool}' requires approval. Approve via CLI 'codeclaw tools allow {exc.tool}', Telegram '/allow {exc.tool}', or Streamlit UI."
-        return response.message
+        deep_agent = self._deep_agent(agent_id, channel, interactive)
+        try:
+            result = deep_agent.invoke({"messages": messages})
+        except ToolApprovalRequired as exc:
+            return f"Tool '{exc.tool}' requires approval. Approve via CLI 'codeclaw tools allow {exc.tool}', Telegram '/allow {exc.tool}', or Streamlit UI."
+        return self._extract_assistant_message(result)

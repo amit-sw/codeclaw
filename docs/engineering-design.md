@@ -1,7 +1,7 @@
 # Engineering Design: Minimal CodeClaw (Pure Python)
 
 ## Planning Session Notes
-- Goals: pure Python Gateway with Telegram + CLI channels, multi-agent routing, on-disk sessions, Streamlit UI, LangChain/LangSmith, OpenAI + local model via OpenAI-compatible HTTP.
+- Goals: pure Python Gateway with Telegram + CLI channels, multi-agent routing, on-disk sessions, Streamlit UI, DeepAgents/LangSmith, OpenAI + local model via OpenAI-compatible HTTP.
 - Constraints: minimal code, minimal exception handling, no skills, no sandbox, global TOML config, simplified WS protocol.
 - Success metrics: CLI/Telegram chat works, sessions persisted and viewable in UI, auth enforced, tools functional end-to-end.
 - Risks: no sandbox for tools; simplified protocol diverges from CodeClaw ecosystem; minimal error handling reduces resilience.
@@ -13,7 +13,7 @@
 **Major components**:
 - Gateway API (HTTP + WebSocket)
 - Session Store (CodeClaw-compatible JSON + JSONL)
-- Agent Runtime (LangChain + LangSmith)
+- Agent Runtime (DeepAgents + LangSmith)
 - Tool Registry (exec, file, web)
 - Channel Adapters (Telegram, CLI)
 - Streamlit UI (chat + sessions)
@@ -64,14 +64,14 @@
 ## Agent Runtime
 - **Purpose**: Execute LLM calls and tool invocations for a turn.
 - **Responsibilities**:
-  1. Build LangChain request.
+  1. Build DeepAgents execution state and plan for each user request.
   2. Call OpenAI or local OpenAI-compatible endpoint.
   3. Invoke tools via Tool Registry.
 - **Inputs**: session history, user message, agent config.
 - **Outputs**: assistant message + tool results.
 - **Interfaces**:
   - `run_turn(session: Session, user_msg: str) -> AssistantResult`
-- **Dependencies**: LangChain, LangSmith, Tool Registry.
+- **Dependencies**: DeepAgents, LangChain model bindings, LangSmith, Tool Registry.
 - **Test Strategy**:
   - Unit: tool routing, prompt assembly.
   - Integration: mocked LLM responses.

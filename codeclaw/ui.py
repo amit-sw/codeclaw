@@ -19,6 +19,9 @@ def _auth_headers(token: str, password: str):
 
 def _request_json(method: str, url: str, **kwargs):
     try:
+        # Gateway calls are local HTTP endpoints; disable TLS verification to avoid
+        # broken global SSL cert path configurations affecting local requests.
+        kwargs.setdefault("verify", False)
         response = httpx.request(method, url, **kwargs)
     except httpx.RequestError as exc:
         return {"ok": False, "error": str(exc)}

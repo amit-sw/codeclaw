@@ -14,7 +14,7 @@ This app runs as three processes:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Configure
