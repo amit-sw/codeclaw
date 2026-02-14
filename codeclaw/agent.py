@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import inspect
 import os
+import pwd
+from pathlib import Path
 from typing import Any
 
 from deepagents import create_deep_agent
@@ -84,8 +86,18 @@ class AgentRuntime:
                 content = getattr(message, "content", None)
                 if content is None and isinstance(message, dict):
                     content = message.get("content")
-                return self._content_text(content)
+                return self._normalize_path_mentions(self._content_text(content))
         raise ValueError("no assistant response produced")
+
+    def _normalize_path_mentions(self, text: str) -> str:
+        if "/root/.codeclaw/" not in text:
+            return text
+        home = Path.home()
+        try:
+            home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+        except KeyError:
+            home = Path.home()
+        return text.replace("/root/.codeclaw/", f"{home}/.codeclaw/")
 
     def _deep_agent(self, agent_id: str, channel: str, interactive: bool):
         llm = self._llm(agent_id)
@@ -109,7 +121,8 @@ class AgentRuntime:
         agent = self._agent_config(agent_id)
         planning_controls = (
             "For every user request, create and maintain a todo plan before execution. "
-            "Only use available tools and follow tool approval controls."
+            "Only use available tools and follow tool approval controls. "
+            "Never claim a file was written unless a file tool actually returned success and path."
         )
         instructions = "\n\n".join(part for part in [agent.system_prompt, planning_controls] if part)
         tool_list = [exec_tool, file_read, file_write, web_fetch]

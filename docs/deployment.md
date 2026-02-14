@@ -24,6 +24,16 @@ mkdir -p ~/.codeclaw
 cp docs/codeclaw.example.toml ~/.codeclaw/codeclaw.toml
 ```
 
+## File Writing Defaults
+- If the agent writes a file without an explicit path, it writes under `~/.codeclaw/`.
+- Default filename is selected by usage/content:
+  - tasks -> `tasks.md`
+  - meetings -> `meetings.md`
+  - notes/summaries -> `notes.md`
+  - ideas -> `ideas.md`
+  - fallback -> `inbox.md`
+- The system also maintains `~/.codeclaw/FILE_INDEX.json` with file purpose and last update metadata.
+
 ## Run Gateway
 ```bash
 codeclaw gateway run

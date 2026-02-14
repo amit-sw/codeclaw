@@ -21,6 +21,12 @@
 - Approve via Telegram: `/allow <tool>`
 - Approve in UI using the sidebar buttons.
 
+## Unexpected File Location
+**Symptom**: File writes go to an unexpected location.
+- If no path is supplied, files are written under `~/.codeclaw/` using usage-aware defaults.
+- If the model sends `/root/.codeclaw/...` on a non-root machine, it is remapped to your home directory.
+- Check `~/.codeclaw/FILE_INDEX.json` for the actual resolved file path and usage.
+
 ## No Messages in UI
 **Symptom**: UI shows no sessions or empty chat.
 - Ensure you are using the correct `token`/`password`.

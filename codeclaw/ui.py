@@ -60,8 +60,21 @@ def main():
         st.stop()
     sessions = sessions_resp.get("sessions", [])
     session_map = {s["title"] + " | " + s["id"]: s["id"] for s in sessions}
-    session_choice = st.sidebar.selectbox("Session", ["New"] + list(session_map.keys()))
-    session_id = session_map.get(session_choice)
+    session_choices = ["New"] + list(session_map.keys())
+    state_key = f"active_session_id::{agent_id}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = None
+
+    default_idx = 0
+    if st.session_state[state_key]:
+        for i, key in enumerate(session_choices):
+            if session_map.get(key) == st.session_state[state_key]:
+                default_idx = i
+                break
+    session_choice = st.sidebar.selectbox("Session", session_choices, index=default_idx)
+    session_id = session_map.get(session_choice) or st.session_state[state_key]
+    if session_choice == "New":
+        session_id = st.session_state[state_key]
 
     st.sidebar.subheader("Tool Approvals")
     allowed = approvals.load()
@@ -73,6 +86,7 @@ def main():
                 approvals.allow(tool)
 
     st.title("Chat")
+    events = []
     if session_id:
         events_resp = _request_json(
             "GET",
@@ -84,13 +98,23 @@ def main():
         if not events_resp.get("ok", True):
             st.error(events_resp.get("error", "failed to load session events"))
             st.stop()
-        for event in events_resp.get("events", []):
-            role = event.get("role")
-            content = event.get("content")
-            st.write(f"**{role}**: {content}")
+        events = events_resp.get("events", [])
 
-    user_msg = st.text_input("Message")
-    if st.button("Send") and user_msg:
+    for event in events:
+        role = event.get("role")
+        content = event.get("content")
+        if role == "user":
+            with st.chat_message("user"):
+                st.write(content)
+        elif role == "assistant":
+            with st.chat_message("assistant"):
+                st.write(content)
+        else:
+            with st.chat_message("assistant"):
+                st.write(f"[{role}] {content}")
+
+    user_msg = st.chat_input("Message")
+    if user_msg:
         resp = _request_json(
             "POST",
             f"{_gateway_url(config)}/api/session/send",
@@ -99,7 +123,10 @@ def main():
             timeout=30,
         )
         if resp.get("ok"):
-            st.write(resp.get("assistant_message"))
+            returned_session_id = resp.get("session_id")
+            if returned_session_id:
+                st.session_state[state_key] = returned_session_id
+            st.rerun()
         else:
             st.error(resp.get("error"))
 

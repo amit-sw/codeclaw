@@ -37,3 +37,4 @@ No Git history was found to infer conventions. Until established, use:
 
 ## Configuration & Secrets
 Do not commit secrets. The gateway reads `~/.codeclaw/codeclaw.toml` for API keys, auth token/password, and channel settings. Use `codeclaw doctor` to validate the file before running.
+File tools default to `~/.codeclaw/` with usage-aware filenames, and maintain `~/.codeclaw/FILE_INDEX.json` as a file usage catalog.
