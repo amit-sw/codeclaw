@@ -42,7 +42,7 @@ def _exec_tool(args: dict[str, Any], allowlist: list[str]) -> dict[str, Any]:
 
 
 def _file_read(args: dict[str, Any]) -> dict[str, Any]:
-    path = _resolve_file_path(args.get("path"), args.get("usage"), args.get("content"))
+    path = _resolve_file_path(args.get("path"), args.get("usage"), args.get("content"), prefer_home_for_existing=True)
     return {"ok": True, "path": str(path), "content": path.read_text()}
 
 
@@ -56,12 +56,43 @@ def _file_write(args: dict[str, Any], channel: str) -> dict[str, Any]:
     return {"ok": True, "path": str(path)}
 
 
-def _resolve_file_path(path_value: Any, usage_value: Any = None, content_value: Any = None) -> Path:
+def _file_list(args: dict[str, Any]) -> dict[str, Any]:
+    path_value = args.get("path")
+    path = _resolve_file_path(path_value, prefer_home_for_existing=True)
+    if not str(path_value or "").strip():
+        path = _user_home()
+    if path.is_file():
+        stat = path.stat()
+        return {
+            "ok": True,
+            "path": str(path),
+            "entries": [{"name": path.name, "type": "file", "size": stat.st_size}],
+        }
+    entries: list[dict[str, Any]] = []
+    for child in sorted(path.iterdir(), key=lambda p: p.name.lower()):
+        entry_type = "dir" if child.is_dir() else "file"
+        entry: dict[str, Any] = {"name": child.name, "type": entry_type}
+        if child.is_file():
+            entry["size"] = child.stat().st_size
+        entries.append(entry)
+    return {"ok": True, "path": str(path), "entries": entries}
+
+
+def _resolve_file_path(
+    path_value: Any,
+    usage_value: Any = None,
+    content_value: Any = None,
+    prefer_home_for_existing: bool = False,
+) -> Path:
     raw = str(path_value or "").strip()
     if not raw or raw.lower() in {"none", "null"}:
         usage = str(usage_value or "").strip() or _infer_usage(str(content_value or ""))
         return (_codeclaw_dir() / _usage_to_filename(usage)).expanduser()
     expanded = Path(raw).expanduser()
+    if prefer_home_for_existing and not expanded.is_absolute() and not raw.startswith("~"):
+        home_candidate = (_user_home() / raw).expanduser()
+        if home_candidate.exists():
+            return home_candidate
     # Some models hardcode /root paths. Remap to the active user home when not root.
     if os.getuid() != 0 and str(expanded).startswith("/root/.codeclaw/"):
         suffix = expanded.relative_to(Path("/root"))
@@ -169,6 +200,8 @@ class ToolRegistry:
             return _exec_tool(args, self.config.exec_allowlist)
         if tool == "file.read":
             return _file_read(args)
+        if tool == "file.list":
+            return _file_list(args)
         if tool == "file.write":
             return _file_write(args, channel)
         if tool == "web.fetch":

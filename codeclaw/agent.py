@@ -6,20 +6,20 @@ import pwd
 from pathlib import Path
 from typing import Any
 
+import httpx
 from deepagents import create_deep_agent
+from deepagents.backends import LocalShellBackend
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from codeclaw.config import AppConfig
 from codeclaw.storage import SessionStore
-from codeclaw.tools import ToolRegistry, ToolApprovalRequired
 
 
 class AgentRuntime:
-    def __init__(self, config: AppConfig, store: SessionStore, tools: ToolRegistry):
+    def __init__(self, config: AppConfig, store: SessionStore):
         self.config = config
         self.store = store
-        self.tools = tools
         os.environ["LANGCHAIN_API_KEY"] = config.langchain.api_key
         os.environ["LANGSMITH_API_KEY"] = config.langsmith.api_key
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
@@ -102,49 +102,50 @@ class AgentRuntime:
     def _deep_agent(self, agent_id: str, channel: str, interactive: bool):
         llm = self._llm(agent_id)
 
-        def exec_tool(cmd: str) -> dict[str, Any]:
-            """Execute a shell command and return stdout/stderr and exit status."""
-            return self.tools.execute("exec", {"cmd": cmd}, channel=channel, interactive=interactive)
-
-        def file_read(path: str) -> dict[str, Any]:
-            """Read file contents from a local path."""
-            return self.tools.execute("file.read", {"path": path}, channel=channel, interactive=interactive)
-
-        def file_write(path: str, content: str) -> dict[str, Any]:
-            """Write content to a local file path."""
-            return self.tools.execute("file.write", {"path": path, "content": content}, channel=channel, interactive=interactive)
-
         def web_fetch(url: str) -> dict[str, Any]:
             """Fetch a URL over HTTP and return response text and status code."""
-            return self.tools.execute("web.fetch", {"url": url}, channel=channel, interactive=interactive)
+            try:
+                resp = httpx.get(url, timeout=20)
+            except httpx.RequestError as exc:
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "status": resp.status_code, "text": resp.text}
 
         agent = self._agent_config(agent_id)
         planning_controls = (
             "For every user request, create and maintain a todo plan before execution. "
-            "Only use available tools and follow tool approval controls. "
-            "Never claim a file was written unless a file tool actually returned success and path."
+            "Use deepagents built-in filesystem and shell tools for all local work. "
+            "Treat this runtime as trusted with full local filesystem access."
         )
         instructions = "\n\n".join(part for part in [agent.system_prompt, planning_controls] if part)
-        tool_list = [exec_tool, file_read, file_write, web_fetch]
+        tool_list = [web_fetch]
+        backend = LocalShellBackend(root_dir=Path.cwd(), virtual_mode=False, inherit_env=True)
         params = inspect.signature(create_deep_agent).parameters
+        common_kwargs: dict[str, Any] = {}
+        if "model" in params:
+            common_kwargs["model"] = llm
+        if "tools" in params:
+            common_kwargs["tools"] = tool_list
+        if "backend" in params:
+            common_kwargs["backend"] = backend
+        if "system_prompt" in params:
+            common_kwargs["system_prompt"] = instructions
+            return create_deep_agent(**common_kwargs)
         if "instructions" in params:
-            if "model" in params:
-                return create_deep_agent(model=llm, tools=tool_list, instructions=instructions)
-            return create_deep_agent(tools=tool_list, instructions=instructions)
+            common_kwargs["instructions"] = instructions
+            return create_deep_agent(**common_kwargs)
         if "prompt_prefix" in params:
             if "model" in params:
+                if "backend" in params:
+                    return create_deep_agent(tool_list, instructions, model=llm, backend=backend)
                 return create_deep_agent(tool_list, instructions, model=llm)
             return create_deep_agent(tool_list, instructions)
-        if "model" in params:
-            return create_deep_agent(model=llm, tools=tool_list)
+        if common_kwargs:
+            return create_deep_agent(**common_kwargs)
         return create_deep_agent(tool_list)
 
     def run_turn(self, agent_id: str, session_id: str, user_msg: str, channel: str, interactive: bool) -> str:
         events = self.store.read_events(agent_id, session_id)
         messages = self._build_messages(agent_id, events, user_msg)
         deep_agent = self._deep_agent(agent_id, channel, interactive)
-        try:
-            result = deep_agent.invoke({"messages": messages})
-        except ToolApprovalRequired as exc:
-            return f"Tool '{exc.tool}' requires approval. Approve via CLI 'codeclaw tools allow {exc.tool}', Telegram '/allow {exc.tool}', or Streamlit UI."
+        result = deep_agent.invoke({"messages": messages})
         return self._extract_assistant_message(result)

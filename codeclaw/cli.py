@@ -5,7 +5,6 @@ import subprocess
 
 import uvicorn
 
-from codeclaw.approvals import ApprovalsStore
 from codeclaw.config import load_config
 from codeclaw.gateway_client import ws_request_sync
 from codeclaw.doctor import run_doctor
@@ -24,10 +23,8 @@ def cmd_agent_send(args):
     config = load_config(args.config)
     result = ws_request_sync(
         _ws_url(config),
-        config.gateway.token,
-        config.gateway.password,
-        "session.send",
-        {
+        method="session.send",
+        params={
             "agent_id": args.agent,
             "session_id": args.session,
             "message": args.message,
@@ -42,10 +39,8 @@ def cmd_sessions_list(args):
     config = load_config(args.config)
     result = ws_request_sync(
         _ws_url(config),
-        config.gateway.token,
-        config.gateway.password,
-        "session.list",
-        {"agent_id": args.agent},
+        method="session.list",
+        params={"agent_id": args.agent},
     )
     for session in result.get("sessions", []):
         print(f"{session['id']}\t{session['title']}")
@@ -55,10 +50,8 @@ def cmd_sessions_view(args):
     config = load_config(args.config)
     result = ws_request_sync(
         _ws_url(config),
-        config.gateway.token,
-        config.gateway.password,
-        "session.events",
-        {"agent_id": args.agent, "session_id": args.session},
+        method="session.events",
+        params={"agent_id": args.agent, "session_id": args.session},
     )
     for event in result.get("events", []):
         role = event.get("role")
@@ -73,12 +66,6 @@ def cmd_doctor(args):
 def cmd_test(args):
     result = subprocess.run(["pytest", "-q"])
     raise SystemExit(result.returncode)
-
-
-def cmd_tools_allow(args):
-    config = load_config(args.config)
-    approvals = ApprovalsStore(config.tools.approvals_path)
-    approvals.allow(args.tool)
 
 
 def build_parser():
@@ -116,12 +103,6 @@ def build_parser():
 
     test = sub.add_parser("test")
     test.set_defaults(func=cmd_test)
-
-    tools = sub.add_parser("tools")
-    tools_sub = tools.add_subparsers(dest="subcommand")
-    tools_allow = tools_sub.add_parser("allow")
-    tools_allow.add_argument("tool")
-    tools_allow.set_defaults(func=cmd_tools_allow)
 
     return parser
 

@@ -55,3 +55,38 @@ def test_file_write_updates_file_index(tmp_path, monkeypatch):
     assert "notes.md" in data
     assert "\"usage\": \"notes\"" in data
     assert "\"channel\": \"webui\"" in data
+
+
+def test_file_list_reads_home_relative_directory(tmp_path, monkeypatch):
+    monkeypatch.setattr("codeclaw.tools._user_home", lambda: tmp_path)
+    target = tmp_path / "genCode"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "a.txt").write_text("a")
+    (target / "subdir").mkdir()
+
+    approvals = ApprovalsStore(str(tmp_path / "approvals.json"))
+    approvals.allow("file.list")
+    registry = ToolRegistry(ToolsConfig(approvals_path=str(tmp_path / "approvals.json")), approvals)
+    result = registry.execute("file.list", {"path": "genCode"}, channel="cli", interactive=False)
+
+    assert result["ok"] is True
+    assert result["path"] == str(target)
+    names = [entry["name"] for entry in result["entries"]]
+    assert "a.txt" in names
+    assert "subdir" in names
+
+
+def test_file_read_prefers_existing_home_relative_path(tmp_path, monkeypatch):
+    monkeypatch.setattr("codeclaw.tools._user_home", lambda: tmp_path)
+    target = tmp_path / "genCode" / "note.txt"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("hello")
+
+    approvals = ApprovalsStore(str(tmp_path / "approvals.json"))
+    approvals.allow("file.read")
+    registry = ToolRegistry(ToolsConfig(approvals_path=str(tmp_path / "approvals.json")), approvals)
+    result = registry.execute("file.read", {"path": "genCode/note.txt"}, channel="cli", interactive=False)
+
+    assert result["ok"] is True
+    assert result["path"] == str(target)
+    assert result["content"] == "hello"

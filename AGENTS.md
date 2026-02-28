@@ -16,7 +16,6 @@ Key paths:
 - `codeclaw sessions view --agent <id> --session <id>`: view transcript events.
 - `codeclaw doctor`: validate config TOML and required paths.
 - `codeclaw test`: run the full pytest suite.
-- `codeclaw tools allow <tool>`: approve a tool permanently.
 - `streamlit run streamlit_app.py`: launch the Streamlit UI.
 - `python -m codeclaw.telegram`: run Telegram polling.
 
@@ -36,5 +35,4 @@ No Git history was found to infer conventions. Until established, use:
 - Pull requests: include a clear description, linked issue (if any), and screenshots for UI changes
 
 ## Configuration & Secrets
-Do not commit secrets. The gateway reads `~/.codeclaw/codeclaw.toml` for API keys, auth token/password, and channel settings. Use `codeclaw doctor` to validate the file before running.
-File tools default to `~/.codeclaw/` with usage-aware filenames, and maintain `~/.codeclaw/FILE_INDEX.json` as a file usage catalog.
+Do not commit secrets. The gateway reads `~/.codeclaw/codeclaw.toml` for API keys and channel settings. Use `codeclaw doctor` to validate the file before running.

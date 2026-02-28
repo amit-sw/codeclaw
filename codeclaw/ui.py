@@ -5,16 +5,11 @@ import os
 import httpx
 import streamlit as st
 
-from codeclaw.approvals import ApprovalsStore
 from codeclaw.config import load_config
 
 
 def _gateway_url(config):
     return f"http://{config.gateway.host}:{config.gateway.port}"
-
-
-def _auth_headers(token: str, password: str):
-    return {"x-token": token, "x-password": password}
 
 
 def _request_json(method: str, url: str, **kwargs):
@@ -35,23 +30,14 @@ def _request_json(method: str, url: str, **kwargs):
 
 def main():
     config = load_config(os.environ.get("CODECLAW_CONFIG"))
-    approvals = ApprovalsStore(config.tools.approvals_path)
 
     st.sidebar.title("CodeClaw Lite")
-    token = st.sidebar.text_input("Token", type="password")
-    password = st.sidebar.text_input("Password", type="password")
-    authed = bool(token and password)
-
-    if not authed:
-        st.stop()
-
     agent_ids = [a.id for a in config.agents]
     agent_id = st.sidebar.selectbox("Agent", agent_ids)
 
     sessions_resp = _request_json(
         "GET",
         f"{_gateway_url(config)}/api/session/list",
-        headers=_auth_headers(token, password),
         params={"agent_id": agent_id},
         timeout=10,
     )
@@ -62,8 +48,20 @@ def main():
     session_map = {s["title"] + " | " + s["id"]: s["id"] for s in sessions}
     session_choices = ["New"] + list(session_map.keys())
     state_key = f"active_session_id::{agent_id}"
+    session_choice_key = f"session_choice::{agent_id}"
+    prev_session_choice_key = f"prev_session_choice::{agent_id}"
+    pending_msg_key = f"pending_user_msg::{agent_id}"
+    pending_err_key = f"pending_user_err::{agent_id}"
     if state_key not in st.session_state:
         st.session_state[state_key] = None
+    if session_choice_key not in st.session_state:
+        st.session_state[session_choice_key] = "New"
+    if prev_session_choice_key not in st.session_state:
+        st.session_state[prev_session_choice_key] = st.session_state[session_choice_key]
+    if pending_msg_key not in st.session_state:
+        st.session_state[pending_msg_key] = ""
+    if pending_err_key not in st.session_state:
+        st.session_state[pending_err_key] = ""
 
     default_idx = 0
     if st.session_state[state_key]:
@@ -71,19 +69,16 @@ def main():
             if session_map.get(key) == st.session_state[state_key]:
                 default_idx = i
                 break
-    session_choice = st.sidebar.selectbox("Session", session_choices, index=default_idx)
-    session_id = session_map.get(session_choice) or st.session_state[state_key]
+    session_choice = st.sidebar.selectbox("Session", session_choices, index=default_idx, key=session_choice_key)
+    prev_choice = st.session_state[prev_session_choice_key]
+    if session_choice == "New" and prev_choice != "New":
+        st.session_state[state_key] = None
+    st.session_state[prev_session_choice_key] = session_choice
+
+    session_id = session_map.get(session_choice)
     if session_choice == "New":
         session_id = st.session_state[state_key]
-
-    st.sidebar.subheader("Tool Approvals")
-    allowed = approvals.load()
-    for tool in ["exec", "file.read", "file.write", "web.fetch"]:
-        if tool in allowed:
-            st.sidebar.write(f"{tool}: allowed")
-        else:
-            if st.sidebar.button(f"Allow {tool}"):
-                approvals.allow(tool)
+    force_new_session = session_choice == "New" and not session_id
 
     st.title("Chat")
     events = []
@@ -91,7 +86,6 @@ def main():
         events_resp = _request_json(
             "GET",
             f"{_gateway_url(config)}/api/session/events",
-            headers=_auth_headers(token, password),
             params={"agent_id": agent_id, "session_id": session_id},
             timeout=10,
         )
@@ -113,22 +107,59 @@ def main():
             with st.chat_message("assistant"):
                 st.write(f"[{role}] {content}")
 
-    user_msg = st.chat_input("Message")
-    if user_msg:
-        resp = _request_json(
-            "POST",
-            f"{_gateway_url(config)}/api/session/send",
-            headers=_auth_headers(token, password),
-            json={"agent_id": agent_id, "message": user_msg, "session_id": session_id, "channel": "webui", "peer": "ui"},
-            timeout=30,
-        )
+    pending_msg = st.session_state[pending_msg_key]
+    pending_err = st.session_state[pending_err_key]
+    if pending_msg:
+        with st.chat_message("user"):
+            st.write(pending_msg)
+
+    user_msg = st.chat_input("Message", disabled=bool(pending_msg))
+    if user_msg and not pending_msg:
+        st.session_state[pending_msg_key] = user_msg
+        st.session_state[pending_err_key] = ""
+        st.rerun()
+
+    pending_msg = st.session_state[pending_msg_key]
+    pending_err = st.session_state[pending_err_key]
+    if pending_msg and not pending_err:
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                resp = _request_json(
+                    "POST",
+                    f"{_gateway_url(config)}/api/session/send",
+                    json={
+                        "agent_id": agent_id,
+                        "message": pending_msg,
+                        "session_id": session_id,
+                        "force_new": force_new_session,
+                        "channel": "webui",
+                        "peer": "ui",
+                    },
+                    timeout=180,
+                )
         if resp.get("ok"):
             returned_session_id = resp.get("session_id")
             if returned_session_id:
                 st.session_state[state_key] = returned_session_id
+            st.session_state[pending_msg_key] = ""
+            st.session_state[pending_err_key] = ""
             st.rerun()
         else:
-            st.error(resp.get("error"))
+            st.session_state[pending_err_key] = resp.get("error", "request failed")
+            st.rerun()
+
+    pending_msg = st.session_state[pending_msg_key]
+    pending_err = st.session_state[pending_err_key]
+    if pending_msg and pending_err:
+        st.error(f"Send failed: {pending_err}")
+        c1, c2 = st.columns(2)
+        if c1.button("Retry send"):
+            st.session_state[pending_err_key] = ""
+            st.rerun()
+        if c2.button("Discard message"):
+            st.session_state[pending_msg_key] = ""
+            st.session_state[pending_err_key] = ""
+            st.rerun()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 [gateway]
 host = "127.0.0.1"
 port = 18789
-token = "dummy-token"
-password = "dummy-password"
 
 [[agents]]
 id = "default"

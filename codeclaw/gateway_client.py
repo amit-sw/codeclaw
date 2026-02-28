@@ -14,7 +14,9 @@ async def _recv_for_id(ws, req_id: int):
             return frame
 
 
-async def ws_request(url: str, token: str, password: str, method: str, params: dict):
+async def ws_request(url: str, token: str = "", password: str = "", method: str = "", params: dict | None = None):
+    if params is None:
+        params = {}
     async with websockets.connect(url) as ws:
         await ws.send(json.dumps({"type": "req", "id": 1, "method": "connect", "params": {"token": token, "password": password, "client": "cli"}}))
         connect_res = await _recv_for_id(ws, 1)
@@ -27,5 +29,5 @@ async def ws_request(url: str, token: str, password: str, method: str, params: d
         return res.get("result")
 
 
-def ws_request_sync(url: str, token: str, password: str, method: str, params: dict):
+def ws_request_sync(url: str, token: str = "", password: str = "", method: str = "", params: dict | None = None):
     return asyncio.run(ws_request(url, token, password, method, params))

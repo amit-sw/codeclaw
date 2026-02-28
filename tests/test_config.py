@@ -8,8 +8,6 @@ def test_load_config(tmp_path):
 [gateway]
 host = "127.0.0.1"
 port = 18789
-token = "t"
-password = "p"
 
 [[agents]]
 id = "default"
@@ -47,5 +45,6 @@ exec_allowlist = []
 """
     )
     config = load_config(str(cfg))
-    assert config.gateway.token == "t"
+    assert config.gateway.token == ""
+    assert config.gateway.password == ""
     assert config.agents[0].id == "default"

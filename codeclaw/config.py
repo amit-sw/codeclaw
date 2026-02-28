@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 class GatewayConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 18789
-    token: str
-    password: str
+    token: str = ""
+    password: str = ""
 
 
 class AgentConfig(BaseModel):
