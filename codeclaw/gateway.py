@@ -29,6 +29,13 @@ def _error_payload(exc: Exception) -> dict[str, Any]:
     return {"ok": False, "error": f"{exc.__class__.__name__}: {exc}"}
 
 
+def _agent_runtime_meta(config: AppConfig, agent_id: str) -> dict[str, str]:
+    for agent in config.agents:
+        if agent.id == agent_id:
+            return {"provider": agent.provider, "model": agent.model}
+    return {"provider": "unknown", "model": "unknown"}
+
+
 def create_app() -> FastAPI:
     config = _load_app_config()
     store = SessionStore(config.storage)
@@ -57,9 +64,27 @@ def create_app() -> FastAPI:
                 force_new=req.force_new,
             )
             store.append_event(req.agent_id, session["id"], {"role": "user", "content": req.message})
-            assistant = runtime.run_turn(req.agent_id, session["id"], req.message, req.channel, interactive=False)
+            runtime_meta = _agent_runtime_meta(config, req.agent_id)
+            store.append_event(
+                req.agent_id,
+                session["id"],
+                {
+                    "role": "llm_request",
+                    "content": {
+                        "provider": runtime_meta["provider"],
+                        "model": runtime_meta["model"],
+                        "message": req.message,
+                        "channel": req.channel,
+                    },
+                },
+            )
+            turn = runtime.run_turn(req.agent_id, session["id"], req.message, req.channel, interactive=False)
+            assistant = str(turn.get("assistant_message", ""))
+            plan = turn.get("plan", [])
             store.append_event(req.agent_id, session["id"], {"role": "assistant", "content": assistant})
-            return {"ok": True, "session_id": session["id"], "assistant_message": assistant}
+            if isinstance(plan, list):
+                store.append_event(req.agent_id, session["id"], {"role": "plan", "content": plan})
+            return {"ok": True, "session_id": session["id"], "assistant_message": assistant, "plan": plan}
         except Exception as exc:
             return _error_payload(exc)
 
@@ -150,9 +175,27 @@ def _handle_ws_request(method: str, params: dict, store: SessionStore, runtime: 
         force_new = bool(params.get("force_new", False))
         session = _get_or_create_session(store, agent_id, channel, peer, session_id, message, force_new=force_new)
         store.append_event(agent_id, session["id"], {"role": "user", "content": message})
-        assistant = runtime.run_turn(agent_id, session["id"], message, channel, interactive=False)
+        runtime_meta = _agent_runtime_meta(config, agent_id)
+        store.append_event(
+            agent_id,
+            session["id"],
+            {
+                "role": "llm_request",
+                "content": {
+                    "provider": runtime_meta["provider"],
+                    "model": runtime_meta["model"],
+                    "message": message,
+                    "channel": channel,
+                },
+            },
+        )
+        turn = runtime.run_turn(agent_id, session["id"], message, channel, interactive=False)
+        assistant = str(turn.get("assistant_message", ""))
+        plan = turn.get("plan", [])
         store.append_event(agent_id, session["id"], {"role": "assistant", "content": assistant})
-        return {"session_id": session["id"], "assistant_message": assistant}
+        if isinstance(plan, list):
+            store.append_event(agent_id, session["id"], {"role": "plan", "content": plan})
+        return {"session_id": session["id"], "assistant_message": assistant, "plan": plan}
     return {"error": f"unknown method {method}"}
 
 

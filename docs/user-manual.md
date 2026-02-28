@@ -34,6 +34,21 @@ This build is configured for trusted local use and does not require login creden
    - `Retry send`
    - `Discard message`
 
+## AI Plan Sidebar
+- The sidebar includes an `AI Plan` panel.
+- It shows current todo steps from the agent with status markers:
+  - `[ ]` pending
+  - `[~]` in progress
+  - `[x]` completed
+- During processing, the panel shows `Updating...` and refreshes with the latest plan state after each turn.
+- Completed plan steps display elapsed time in seconds, rounded to the nearest second (example: `(12s)`).
+
+## LLM Request Log Sidebar
+- The sidebar includes an `LLM Requests` panel for the current session.
+- It shows requests in reverse chronological order (most recent first).
+- While a request is running, a `[pending]` entry appears at the top.
+- Completed requests display elapsed time in seconds, rounded to the nearest second.
+
 ## Use the CLI
 - Send a message:
   ```bash
@@ -48,11 +63,41 @@ This build is configured for trusted local use and does not require login creden
   codeclaw sessions view --agent default --session <session_id>
   ```
 
-## Telegram (Optional)
-Run the Telegram poller:
-```bash
-python -m codeclaw.telegram
-```
+## Telegram Setup (Optional)
+Use these steps exactly to connect Telegram.
+
+1. Download and install Telegram:
+   - Mobile: install Telegram from your app store.
+   - Desktop: install Telegram Desktop from the official Telegram site.
+2. Sign in to Telegram with your phone number.
+3. In Telegram search, open `@BotFather`.
+4. Send `/newbot` to BotFather.
+5. Follow prompts:
+   - Set a bot display name.
+   - Set a bot username that ends with `bot` (example: `my_codeclaw_bot`).
+6. BotFather returns an HTTP API token (often what people call the bot id), for example:
+   - `123456789:AA...`
+7. Start the gateway:
+   ```bash
+   codeclaw gateway run
+   ```
+8. Start the web app in another terminal:
+   ```bash
+   streamlit run streamlit_app.py
+   ```
+9. In the sidebar, open `Telegram Bot Setup` and enter:
+   - `Bot Token` from BotFather
+   - `Poll Interval (seconds)` (for example, `3`)
+10. Click `Save Telegram Settings`.
+11. Start the Telegram poller in another terminal:
+   ```bash
+   python -m codeclaw.telegram
+   ```
+12. Open your bot in Telegram and send `/start`, then send a normal message.
+
+Notes:
+- The poller only receives updates for chats that already sent at least one message to the bot.
+- Keep your bot token secret.
 
 ## Working With Local Files
 The assistant can directly access local files in this trusted setup.
@@ -83,3 +128,13 @@ Examples:
 ## Safety Note
 This system is configured for trusted local environments. It can access local files and run local commands through deepagents. Do not expose it to untrusted users or networks.
 
+## Web Search
+The assistant includes a web search capability powered by OpenAI's `web_search` tool.
+
+Behavior:
+- It should be used only when you explicitly ask for web/internet lookup.
+- It should not be used for normal local coding or filesystem tasks.
+
+Good prompts:
+- `Search the web for the latest FastAPI release notes and summarize key changes.`
+- `Find current guidance for OpenAI Responses API tool usage and cite sources.`

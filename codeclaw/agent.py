@@ -6,11 +6,11 @@ import pwd
 from pathlib import Path
 from typing import Any
 
-import httpx
 from deepagents import create_deep_agent
 from deepagents.backends import LocalShellBackend
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from openai import OpenAI
 
 from codeclaw.config import AppConfig
 from codeclaw.storage import SessionStore
@@ -99,25 +99,63 @@ class AgentRuntime:
             home = Path.home()
         return text.replace("/root/.codeclaw/", f"{home}/.codeclaw/")
 
+    def _extract_plan(self, result: dict[str, Any]) -> list[dict[str, str]]:
+        todos = result.get("todos")
+        if not isinstance(todos, list):
+            return []
+        normalized: list[dict[str, str]] = []
+        for item in todos:
+            if not isinstance(item, dict):
+                continue
+            content = str(item.get("content", "")).strip()
+            status = str(item.get("status", "pending")).strip().lower()
+            if not content:
+                continue
+            if status not in {"pending", "in_progress", "completed"}:
+                status = "pending"
+            normalized.append({"content": content, "status": status})
+        return normalized
+
     def _deep_agent(self, agent_id: str, channel: str, interactive: bool):
         llm = self._llm(agent_id)
-
-        def web_fetch(url: str) -> dict[str, Any]:
-            """Fetch a URL over HTTP and return response text and status code."""
-            try:
-                resp = httpx.get(url, timeout=20)
-            except httpx.RequestError as exc:
-                return {"ok": False, "error": str(exc)}
-            return {"ok": True, "status": resp.status_code, "text": resp.text}
-
         agent = self._agent_config(agent_id)
+
+        def web_search_openai(query: str) -> dict[str, Any]:
+            """Search the public web using OpenAI's web_search tool for explicitly web-related queries."""
+            query = query.strip()
+            if not query:
+                return {"ok": False, "error": "query cannot be empty"}
+            if agent.provider != "openai":
+                return {"ok": False, "error": "web_search_openai requires an OpenAI agent/provider."}
+            client = OpenAI(api_key=self.config.llm.openai.api_key, base_url=self.config.llm.openai.base_url)
+            try:
+                response = client.responses.create(
+                    model=agent.model,
+                    input=query,
+                    tools=[
+                        {
+                            "type": "web_search",
+                            "search_context_size": "medium",
+                            "user_location": {"type": "approximate", "country": "US", "timezone": "America/Los_Angeles"},
+                        }
+                    ],
+                )
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": str(exc)}
+            answer = (getattr(response, "output_text", None) or "").strip()
+            if not answer:
+                answer = str(getattr(response, "output", ""))[:5000]
+            return {"ok": True, "query": query, "answer": answer}
+
         planning_controls = (
             "For every user request, create and maintain a todo plan before execution. "
             "Use deepagents built-in filesystem and shell tools for all local work. "
-            "Treat this runtime as trusted with full local filesystem access."
+            "Treat this runtime as trusted with full local filesystem access. "
+            "Use web_search_openai only when the user explicitly asks for web/internet lookup, latest/current events, "
+            "or external factual information not available locally. Do not call it for local coding/filesystem tasks."
         )
         instructions = "\n\n".join(part for part in [agent.system_prompt, planning_controls] if part)
-        tool_list = [web_fetch]
+        tool_list = [web_search_openai]
         backend = LocalShellBackend(root_dir=Path.cwd(), virtual_mode=False, inherit_env=True)
         params = inspect.signature(create_deep_agent).parameters
         common_kwargs: dict[str, Any] = {}
@@ -143,9 +181,14 @@ class AgentRuntime:
             return create_deep_agent(**common_kwargs)
         return create_deep_agent(tool_list)
 
-    def run_turn(self, agent_id: str, session_id: str, user_msg: str, channel: str, interactive: bool) -> str:
+    def run_turn(
+        self, agent_id: str, session_id: str, user_msg: str, channel: str, interactive: bool
+    ) -> dict[str, Any]:
         events = self.store.read_events(agent_id, session_id)
         messages = self._build_messages(agent_id, events, user_msg)
         deep_agent = self._deep_agent(agent_id, channel, interactive)
         result = deep_agent.invoke({"messages": messages})
-        return self._extract_assistant_message(result)
+        return {
+            "assistant_message": self._extract_assistant_message(result),
+            "plan": self._extract_plan(result),
+        }

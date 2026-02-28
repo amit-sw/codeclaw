@@ -120,8 +120,10 @@ class SessionStore:
     def append_event(self, agent_id: str, session_id: str, event: dict) -> None:
         path = self._events_path(agent_id, session_id)
         path.parent.mkdir(parents=True, exist_ok=True)
+        event_to_write = dict(event)
+        event_to_write.setdefault("created_at", _now())
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(event) + "\n")
+            f.write(json.dumps(event_to_write) + "\n")
         self.touch_session(agent_id, session_id)
         self.compact_if_needed(agent_id)
 
