@@ -1,10 +1,9 @@
 # Deployment Guide
 
 ## Overview
-This app runs as three processes:
-- Gateway (FastAPI + WebSocket)
+This app runs as two processes:
+- Gateway (FastAPI + WebSocket + integrated Telegram polling)
 - Streamlit UI
-- Telegram polling (optional)
 
 ## Prerequisites
 - Python 3.11+
@@ -38,10 +37,12 @@ codeclaw gateway run
 streamlit run streamlit_app.py
 ```
 
-## Run Telegram Poller (optional)
-```bash
-python -m codeclaw.telegram
-```
+## Telegram Polling
+- Telegram polling runs inside the gateway process by default.
+- To disable integrated Telegram polling for a gateway run, set:
+  - `CODECLAW_DISABLE_GATEWAY_TELEGRAM=1`
+- Voice messages are supported via Telegram `voice` updates and OpenAI transcription (`/audio/transcriptions`).
+- Ensure `[llm.openai].api_key` is set and `telegram.voice_transcription_enabled = true`.
 
 ## Validate Config
 ```bash
@@ -59,3 +60,4 @@ codeclaw test
 
 ## Upgrade Notes
 - If you change the config schema, update `codeclaw/config.py`, `docs/codeclaw.example.toml`, and `docs/engineering-design.md`.
+- If you change Telegram runtime behavior, also update `codeclaw/telegram.py` and this deployment guide.

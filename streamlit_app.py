@@ -1,5 +1,3 @@
-from codeclaw.ui import main
+from codeclaw.ui import render_welcome_page
 
-
-if __name__ == "__main__":
-    main()
+render_welcome_page()

@@ -11,11 +11,10 @@ This manual is for operators maintaining a local CodeClaw Lite deployment.
 - Intended environment: trusted local network or localhost only
 
 ## Architecture
-- Gateway (`FastAPI` + WebSocket): `codeclaw gateway run`
+- Gateway (`FastAPI` + WebSocket + integrated Telegram poller): `codeclaw gateway run`
 - Agent runtime: `codeclaw/agent.py`
 - Session storage: filesystem-backed session store
 - Web UI: Streamlit (`streamlit_app.py`)
-- Telegram poller (optional): `python -m codeclaw.telegram`
 
 ## Key Paths
 - Config: `~/.codeclaw/codeclaw.toml`
@@ -48,7 +47,6 @@ Critical sections:
 ```bash
 codeclaw gateway run
 streamlit run streamlit_app.py
-python -m codeclaw.telegram
 ```
 
 ### Telegram Provisioning (BotFather)
@@ -67,7 +65,7 @@ Set up Telegram bot access before running the poller.
    codeclaw gateway run
    streamlit run streamlit_app.py
    ```
-7. In Streamlit sidebar, open `Telegram Bot Setup`, set:
+7. In the `Configuration` page, open `Telegram Runtime`, set:
    - `Bot Token` = value from BotFather
    - `Poll Interval (seconds)` = desired polling interval
 8. Click `Save Telegram Settings`.
@@ -75,12 +73,13 @@ Set up Telegram bot access before running the poller.
    ```bash
    curl -s "https://api.telegram.org/bot<PASTE_TOKEN>/getMe"
    ```
-10. Restart poller after config changes.
+10. Restart gateway after config changes (integrated poller reloads config on startup).
 11. Ensure end users send `/start` to the bot at least once so updates are visible to polling.
 
 Operational note:
 - `codeclaw/telegram.py` routes incoming Telegram messages to `config.agents[0].id`.
 - If you need a different default agent for Telegram, reorder `[[agents]]` in config.
+- Telegram `voice` updates are transcribed through OpenAI `/audio/transcriptions` before gateway dispatch.
 
 ### Health Checks
 - HTTP health:
@@ -131,7 +130,7 @@ Minimum operational controls:
    codeclaw doctor
    codeclaw test
    ```
-4. Restart gateway/UI/poller.
+4. Restart gateway/UI.
 
 ## Troubleshooting Checklist
 - Gateway up but UI empty:
@@ -141,7 +140,7 @@ Minimum operational controls:
 - File operation confusion:
   - enforce absolute paths in prompts
 - Telegram silent:
-  - verify bot token from BotFather and poller process health
+  - verify bot token from BotFather and gateway-integrated poller health (`/api/runtime/status`)
   - verify user already sent `/start` to the bot
   - verify `getMe` returns `ok: true` for the configured token
 

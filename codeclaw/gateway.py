@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 from codeclaw.agent import AgentRuntime
 from codeclaw.config import AppConfig, load_config
 from codeclaw.storage import SessionStore
+from codeclaw.telegram import get_active_poller_status, start_poller_in_background, stop_active_poller
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +42,14 @@ def _agent_runtime_meta(config: AppConfig, agent_id: str) -> dict[str, str]:
         if agent.id == agent_id:
             return {"provider": agent.provider, "model": agent.model}
     return {"provider": "unknown", "model": "unknown"}
+
+
+def _telegram_should_run(config: AppConfig) -> bool:
+    token = str(getattr(config.telegram, "bot_token", "") or "").strip()
+    if not token:
+        return False
+    disabled = str(os.environ.get("CODECLAW_DISABLE_GATEWAY_TELEGRAM", "")).strip().lower()
+    return disabled not in {"1", "true", "yes", "on"}
 
 
 def _append_turn_events(
@@ -84,7 +94,19 @@ def create_app() -> FastAPI:
     store = SessionStore(config.storage)
     runtime = AgentRuntime(config, store)
 
-    app = FastAPI()
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if _telegram_should_run(config):
+            start_poller_in_background(config)
+            log.info("gateway startup: integrated telegram poller enabled")
+        else:
+            log.info("gateway startup: integrated telegram poller disabled")
+        try:
+            yield
+        finally:
+            stop_active_poller()
+
+    app = FastAPI(lifespan=lifespan)
 
     @app.get("/health")
     def health():
@@ -93,6 +115,19 @@ def create_app() -> FastAPI:
     @app.get("/api/agents")
     def agents():
         return {"ok": True, "agents": [a.model_dump() for a in config.agents]}
+
+    @app.get("/api/runtime/status")
+    def runtime_status():
+        telegram_status = get_active_poller_status()
+        return {
+            "ok": True,
+            "telegram": telegram_status,
+            "gateway": {
+                "host": config.gateway.host,
+                "port": config.gateway.port,
+                "telegram_integrated": _telegram_should_run(config),
+            },
+        }
 
     @app.post("/api/session/send")
     def session_send(req: SendRequest):

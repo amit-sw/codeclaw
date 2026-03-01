@@ -33,8 +33,16 @@
 ## Telegram Not Responding
 **Symptom**: Bot does not reply.
 - Confirm `telegram.bot_token` is correct.
-- Ensure the poller is running (`python -m codeclaw.telegram`).
+- Ensure the gateway is running (Telegram poller is integrated in gateway startup).
+- Check runtime status at `GET /api/runtime/status` and inspect `telegram.running`.
 - Check connectivity to `api.telegram.org`.
+
+## Telegram Voice Transcription Fails
+**Symptom**: Text messages work, but voice messages fail or are ignored.
+- Confirm `telegram.voice_transcription_enabled = true`.
+- Confirm `[llm.openai].api_key` is configured and valid.
+- Confirm `[llm.openai].base_url` exposes `/audio/transcriptions`.
+- Reduce audio size or increase `telegram.voice_max_seconds` / `telegram.voice_max_bytes`.
 
 ## Tests Failing
 **Symptom**: `codeclaw test` fails.

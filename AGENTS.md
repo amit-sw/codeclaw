@@ -17,7 +17,7 @@ Key paths:
 - `codeclaw doctor`: validate config TOML and required paths.
 - `codeclaw test`: run the full pytest suite.
 - `streamlit run streamlit_app.py`: launch the Streamlit UI.
-- `python -m codeclaw.telegram`: run Telegram polling.
+- Telegram polling is integrated into `codeclaw gateway run` by default.
 
 ## Coding Style & Naming Conventions
 - Indentation: 4 spaces (Python).

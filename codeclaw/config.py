@@ -62,6 +62,10 @@ class TelegramConfig(BaseModel):
     partial_reply_chunk_chars: int = 240
     partial_reply_delay_seconds: float = 0.08
     max_queue_per_chat: int = 100
+    voice_transcription_enabled: bool = True
+    voice_transcription_model: str = "whisper-1"
+    voice_max_seconds: int = 180
+    voice_max_bytes: int = 25_000_000
 
 
 class StorageConfig(BaseModel):

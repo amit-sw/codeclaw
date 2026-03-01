@@ -50,6 +50,10 @@ stream_partial_replies = false
 partial_reply_chunk_chars = 240
 partial_reply_delay_seconds = 0.08
 max_queue_per_chat = 100
+voice_transcription_enabled = true
+voice_transcription_model = "whisper-1"
+voice_max_seconds = 180
+voice_max_bytes = 25000000
 
 [storage]
 base_path = "~/.codeclaw/agents"

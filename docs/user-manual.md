@@ -23,8 +23,16 @@ This build is configured for trusted local use and does not require login creden
    streamlit run streamlit_app.py
    ```
 3. Open Streamlit in your browser (usually `http://localhost:8501`).
+4. Telegram polling starts automatically inside the gateway process.
 
 ## Use the Web UI
+The app is split across pages:
+1. `Welcome`: runtime health and deployment summary.
+2. `Chat`: active conversation UI and session switching.
+3. `Configuration`: gateway/Telegram/model runtime settings.
+4. `Logs and Processing`: queue/metrics/audit visibility.
+
+In `Chat`:
 1. Select an `Agent` in the sidebar.
 2. Select `Session`:
    - `New` starts a fresh conversation.
@@ -85,19 +93,17 @@ Use these steps exactly to connect Telegram.
    ```bash
    streamlit run streamlit_app.py
    ```
-9. In the sidebar, open `Telegram Bot Setup` and enter:
+9. In the `Configuration` page, open the `Telegram Runtime` section and enter:
    - `Bot Token` from BotFather
    - `Poll Interval (seconds)` (for example, `3`)
 10. Click `Save Telegram Settings`.
-11. Start the Telegram poller in another terminal:
-   ```bash
-   python -m codeclaw.telegram
-   ```
+11. Restart the gateway so integrated Telegram polling picks up new settings.
 12. Open your bot in Telegram and send `/start`, then send a normal message.
 
 Notes:
 - The poller only receives updates for chats that already sent at least one message to the bot.
 - Keep your bot token secret.
+- Voice messages are transcribed with OpenAI Whisper (`telegram.voice_transcription_model`, default `whisper-1`) and processed like typed messages.
 
 ## Working With Local Files
 The assistant can directly access local files in this trusted setup.
@@ -124,6 +130,10 @@ Examples:
   - Verify model name and API key in `~/.codeclaw/codeclaw.toml`.
 - Wrong file path behavior:
   - Retry with an absolute path.
+- Voice message not processed:
+  - Verify `telegram.voice_transcription_enabled = true`.
+  - Verify `[llm.openai].api_key` is valid.
+  - Check `telegram.voice_max_seconds` and `telegram.voice_max_bytes` limits.
 
 ## Safety Note
 This system is configured for trusted local environments. It can access local files and run local commands through deepagents. Do not expose it to untrusted users or networks.
