@@ -6,6 +6,7 @@ port = 18789
 id = "default"
 name = "Default Agent"
 model = "gpt-5.3"
+fallback_models = ["gpt-5-mini"]
 provider = "openai"
 system_prompt = "You are a concise assistant."
 
@@ -24,6 +25,10 @@ base_url = "https://api.openai.com/v1"
 base_url = "http://localhost:8000/v1"
 api_key = "dummy-local-key"
 
+# Request timeout/failover behavior.
+request_timeout_seconds = 120
+max_retries = 2
+
 [langchain]
 api_key = "dummy-langchain-key"
 
@@ -36,7 +41,15 @@ project = "codeclaw-lite-graph"
 
 [telegram]
 bot_token = "dummy-telegram-bot-token"
-poll_interval = 3
+poll_interval = 1
+typing_interval_seconds = 3
+send_max_retries = 4
+send_backoff_seconds = 1.0
+offset_path = "~/.codeclaw/telegram_offset.json"
+stream_partial_replies = false
+partial_reply_chunk_chars = 240
+partial_reply_delay_seconds = 0.08
+max_queue_per_chat = 100
 
 [storage]
 base_path = "~/.codeclaw/agents"
@@ -49,3 +62,22 @@ exec_allowlist = ["echo", "ls", "pwd"]
 
 [doctor]
 strict_mode = true
+
+[context]
+context_window_tokens = 128000
+reserve_tokens = 20000
+compact_trigger_tokens = 8000
+keep_recent_events = 24
+summary_line_limit = 120
+
+[memory]
+enabled = true
+max_search_results = 8
+max_snippet_chars = 320
+
+[self_update]
+enabled = true
+audit_log_path = "~/.codeclaw/audit.jsonl"
+
+[observability]
+log_turn_metrics = true

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -11,6 +13,8 @@ from codeclaw.agent import AgentRuntime
 from codeclaw.config import AppConfig, load_config
 from codeclaw.storage import SessionStore
 
+log = logging.getLogger(__name__)
+
 
 class SendRequest(BaseModel):
     agent_id: str
@@ -19,6 +23,8 @@ class SendRequest(BaseModel):
     force_new: bool = False
     channel: str = "cli"
     peer: str = "local"
+    queue_depth: int | None = None
+    stream_partial: bool = False
 
 
 def _load_app_config() -> AppConfig:
@@ -34,6 +40,43 @@ def _agent_runtime_meta(config: AppConfig, agent_id: str) -> dict[str, str]:
         if agent.id == agent_id:
             return {"provider": agent.provider, "model": agent.model}
     return {"provider": "unknown", "model": "unknown"}
+
+
+def _append_turn_events(
+    store: SessionStore,
+    config: AppConfig,
+    agent_id: str,
+    session_id: str,
+    channel: str,
+    message: str,
+    assistant: str,
+    plan: Any,
+    metrics: dict[str, Any],
+    queue_depth: int | None = None,
+) -> None:
+    runtime_meta = _agent_runtime_meta(config, agent_id)
+    store.append_event(agent_id, session_id, {"role": "user", "content": message})
+    llm_event = {
+        "provider": runtime_meta["provider"],
+        "model": runtime_meta["model"],
+        "message": message,
+        "channel": channel,
+    }
+    if queue_depth is not None:
+        llm_event["queue_depth"] = int(queue_depth)
+    store.append_event(
+        agent_id,
+        session_id,
+        {
+            "role": "llm_request",
+            "content": llm_event,
+        },
+    )
+    store.append_event(agent_id, session_id, {"role": "assistant", "content": assistant})
+    if isinstance(plan, list):
+        store.append_event(agent_id, session_id, {"role": "plan", "content": plan})
+    if metrics:
+        store.append_event(agent_id, session_id, {"role": "metrics", "content": metrics})
 
 
 def create_app() -> FastAPI:
@@ -54,6 +97,7 @@ def create_app() -> FastAPI:
     @app.post("/api/session/send")
     def session_send(req: SendRequest):
         try:
+            started = time.perf_counter()
             session = _get_or_create_session(
                 store,
                 req.agent_id,
@@ -63,28 +107,32 @@ def create_app() -> FastAPI:
                 req.message,
                 force_new=req.force_new,
             )
-            store.append_event(req.agent_id, session["id"], {"role": "user", "content": req.message})
-            runtime_meta = _agent_runtime_meta(config, req.agent_id)
-            store.append_event(
-                req.agent_id,
-                session["id"],
-                {
-                    "role": "llm_request",
-                    "content": {
-                        "provider": runtime_meta["provider"],
-                        "model": runtime_meta["model"],
-                        "message": req.message,
-                        "channel": req.channel,
-                    },
-                },
-            )
             turn = runtime.run_turn(req.agent_id, session["id"], req.message, req.channel, interactive=False)
             assistant = str(turn.get("assistant_message", ""))
             plan = turn.get("plan", [])
-            store.append_event(req.agent_id, session["id"], {"role": "assistant", "content": assistant})
-            if isinstance(plan, list):
-                store.append_event(req.agent_id, session["id"], {"role": "plan", "content": plan})
-            return {"ok": True, "session_id": session["id"], "assistant_message": assistant, "plan": plan}
+            metrics = dict(turn.get("metrics", {}))
+            metrics["gateway_duration_ms"] = int((time.perf_counter() - started) * 1000)
+            _append_turn_events(
+                store=store,
+                config=config,
+                agent_id=req.agent_id,
+                session_id=session["id"],
+                channel=req.channel,
+                message=req.message,
+                assistant=assistant,
+                plan=plan,
+                metrics=metrics,
+                queue_depth=req.queue_depth,
+            )
+            if config.observability.log_turn_metrics:
+                log.info(
+                    "gateway turn agent=%s session=%s duration_ms=%s queue_depth=%s",
+                    req.agent_id,
+                    session["id"],
+                    metrics["gateway_duration_ms"],
+                    req.queue_depth,
+                )
+            return {"ok": True, "session_id": session["id"], "assistant_message": assistant, "plan": plan, "metrics": metrics}
         except Exception as exc:
             return _error_payload(exc)
 
@@ -167,35 +215,41 @@ def _handle_ws_request(method: str, params: dict, store: SessionStore, runtime: 
         session_id = params.get("session_id")
         return {"events": store.read_events(agent_id, session_id)}
     if method == "session.send":
+        started = time.perf_counter()
         agent_id = params.get("agent_id")
         channel = params.get("channel", "cli")
         peer = params.get("peer", "local")
         message = params.get("message", "")
         session_id = params.get("session_id")
         force_new = bool(params.get("force_new", False))
+        queue_depth = params.get("queue_depth")
         session = _get_or_create_session(store, agent_id, channel, peer, session_id, message, force_new=force_new)
-        store.append_event(agent_id, session["id"], {"role": "user", "content": message})
-        runtime_meta = _agent_runtime_meta(config, agent_id)
-        store.append_event(
-            agent_id,
-            session["id"],
-            {
-                "role": "llm_request",
-                "content": {
-                    "provider": runtime_meta["provider"],
-                    "model": runtime_meta["model"],
-                    "message": message,
-                    "channel": channel,
-                },
-            },
-        )
         turn = runtime.run_turn(agent_id, session["id"], message, channel, interactive=False)
         assistant = str(turn.get("assistant_message", ""))
         plan = turn.get("plan", [])
-        store.append_event(agent_id, session["id"], {"role": "assistant", "content": assistant})
-        if isinstance(plan, list):
-            store.append_event(agent_id, session["id"], {"role": "plan", "content": plan})
-        return {"session_id": session["id"], "assistant_message": assistant, "plan": plan}
+        metrics = dict(turn.get("metrics", {}))
+        metrics["gateway_duration_ms"] = int((time.perf_counter() - started) * 1000)
+        _append_turn_events(
+            store=store,
+            config=config,
+            agent_id=agent_id,
+            session_id=session["id"],
+            channel=channel,
+            message=message,
+            assistant=assistant,
+            plan=plan,
+            metrics=metrics,
+            queue_depth=int(queue_depth) if isinstance(queue_depth, int) else None,
+        )
+        if config.observability.log_turn_metrics:
+            log.info(
+                "gateway ws turn agent=%s session=%s duration_ms=%s queue_depth=%s",
+                agent_id,
+                session["id"],
+                metrics["gateway_duration_ms"],
+                queue_depth,
+            )
+        return {"session_id": session["id"], "assistant_message": assistant, "plan": plan, "metrics": metrics}
     return {"error": f"unknown method {method}"}
 
 

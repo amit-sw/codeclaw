@@ -41,7 +41,7 @@ def _config() -> AppConfig:
 
 def test_deep_agent_uses_filesystem_backend(monkeypatch):
     runtime = AgentRuntime(_config(), _DummyStore())
-    monkeypatch.setattr(runtime, "_llm", lambda _: object())
+    monkeypatch.setattr(runtime, "_llm", lambda _, __: object())
     captured = {}
 
     def _fake_create_deep_agent(model=None, tools=None, system_prompt=None, backend=None, **kwargs):
@@ -57,7 +57,15 @@ def test_deep_agent_uses_filesystem_backend(monkeypatch):
         return object()
 
     monkeypatch.setattr("codeclaw.agent.create_deep_agent", _fake_create_deep_agent)
-    runtime._deep_agent("default", channel="cli", interactive=False)
+    runtime._deep_agent(
+        "default",
+        session_id="s1",
+        user_msg="hello",
+        channel="cli",
+        interactive=False,
+        model="gpt-5",
+        tool_timings=[],
+    )
 
     assert isinstance(captured["backend"], LocalShellBackend)
     assert captured["backend"].cwd == Path.cwd().resolve()
@@ -68,7 +76,7 @@ def test_deep_agent_uses_filesystem_backend(monkeypatch):
 
 def test_web_search_tool_calls_openai_web_search(monkeypatch):
     runtime = AgentRuntime(_config(), _DummyStore())
-    monkeypatch.setattr(runtime, "_llm", lambda _: object())
+    monkeypatch.setattr(runtime, "_llm", lambda _, __: object())
     captured_agent = {}
     captured_call = {}
     captured_client = {}
@@ -92,7 +100,15 @@ def test_web_search_tool_calls_openai_web_search(monkeypatch):
 
     monkeypatch.setattr("codeclaw.agent.create_deep_agent", _fake_create_deep_agent)
     monkeypatch.setattr("codeclaw.agent.OpenAI", _DummyClient)
-    runtime._deep_agent("default", channel="cli", interactive=False)
+    runtime._deep_agent(
+        "default",
+        session_id="s1",
+        user_msg="hello",
+        channel="cli",
+        interactive=False,
+        model="gpt-5",
+        tool_timings=[],
+    )
 
     web_tool = next(tool for tool in captured_agent["tools"] if getattr(tool, "__name__", "") == "web_search_openai")
     result = web_tool("latest updates")
@@ -115,7 +131,7 @@ def test_run_turn_returns_assistant_message_and_plan(monkeypatch):
                 "todos": [{"content": "Step A", "status": "in_progress"}],
             }
 
-    monkeypatch.setattr(runtime, "_deep_agent", lambda agent_id, channel, interactive: _DummyDeepAgent())
+    monkeypatch.setattr(runtime, "_deep_agent", lambda *args, **kwargs: _DummyDeepAgent())
     result = runtime.run_turn("default", "s1", "hello", "webui", interactive=False)
     assert result["assistant_message"] == "done"
     assert result["plan"] == [{"content": "Step A", "status": "in_progress"}]
